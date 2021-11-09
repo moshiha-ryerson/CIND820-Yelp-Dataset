@@ -59,10 +59,61 @@ summary(reviewdata)
 #Filter data for recent reviews (2018)
 library(dplyr)
 reviewdata <- reviewdata[c("review_id", "business_id", "stars", "date", "text")]
-reviewdata %>% filter(grepl('2018',date))
+reviewData <- reviewdata %>% filter(grepl('2018',date))
+```
+
+```{r}
+#Create one dataset with all the features that were extracted from the original dataset
+library(dplyr)
+yelpdataset <- merge(businessData, reviewData)
+yelpdataset
 ```
 ```{r}
+write.csv(yelpdataset,"/Users/moshihathiyaageswaran/Downloads/Yelp Dataset.csv")
+```
+
+```{r}
+#Identify the amount of different cities within British Columbia 
+city <- unique(yelpdataset$city)
+length(city)
+city
+```
+
+```{r}
+#Identify the amount of different businesses within British Columbia 
+businessID <- data.frame(unique(yelpdataset$business_id))
+businessID
+```
+```{r}
+#Create a dataframe with the unique businesses and their corresponding review count
+businessID <- rep(c(yelpdataset$business_id))
+reviewCount <- rep(c(yelpdataset$review_count))
+City <- rep(c(yelpdataset$city))
+Stars <- rep(c(yelpdataset$stars))
+df <- data.frame(businessID,reviewCount,City, Stars)
+yelp <- unique(df[c("businessID","reviewCount", "City", "Stars")])
+yelp
+```
+```{r}
+#Rearranging the data to identify the businesses with the highest review count
 library(dplyr)
-yelpdataset <- merge(businessData, reviewdata)
-yelpdataset
+yelpp <- yelp %>% arrange(desc(reviewCount)) 
+yelpp
+```
+
+```{r}
+yelp2 <- yelpp[order(yelpp$City),]
+yelp2
+```
+```{r}
+#Uncover the relationship between review count and stars. It is understood that customers are more likely to leave a review when they have a good experience with a restaurant which is reflected through the star rating. This helps us identify the correlation between review count and stars, a greater amount of review counts are directly related to a higher overall star rating. 
+plot(yelp2$reviewCount, yelp2$Stars, main = "Relationship Between Review Count and Stars", xlab = "Review Count", ylab = "Stars")
+```
+
+```{r}
+#Boxplot for numerical attributes 
+#For the purpose of this research, outliers will not be a concern. 
+par(mfcol=c(2,1))
+boxplot(yelp$reviewCount, horizontal = TRUE, outline = TRUE, main = "Boxplot for Review Count")
+boxplot(yelp$Stars, horizontal = TRUE, outline = TRUE, main = "Boxplot for Stars")
 ```
