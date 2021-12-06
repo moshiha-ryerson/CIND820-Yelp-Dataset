@@ -1,0 +1,165 @@
+---
+title: "Information Retrieval"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+# install.packages("rJava")
+# install.packages("lexicon", dependencies = TRUE)
+# install.packages("tm", dependencies = TRUE)
+# install.packages("RWeka", dependencies = TRUE)
+# install.packages("textstem", dependencies = TRUE)
+# install.packages("textclean", dependencies = TRUE)
+lstPackages <- c('lexicon', 'tm', 'RWeka', 'textstem', 'textclean')
+lapply(lstPackages, library, character.only = TRUE)
+```
+
+```{r}
+yelpdataset <- read.csv("/Users/moshihathiyaageswaran/Desktop/YelpDataset.csv")
+df <- data.frame(yelpdataset)
+size <- length(df$X)
+df$X <- paste0("Doc", c(1:size))
+print(df)
+```
+
+```{r}
+#Prepare the Corpora
+words <- tm::VectorSource(df$text)
+words$names <- names(df$X)
+textData <- tm::VCorpus(words)
+```
+
+```{r}
+#Replacing number with words
+for (i in 1:7421)
+{
+  textData[[i]]$content <- 
+  as.character(textclean::replace_number(textData[[i]]$content))
+}
+
+#Utilizing a Thesaurus
+for (i in 1:7421)
+{
+  textData[[i]]$content <- 
+  textstem::lemmatize_strings(textData[[i]]$content,
+                              dictionary = lexicon::hash_lemmas)
+}
+
+yelpdataset <- data.frame(lapply(yelpdataset, as.character), stringsAsFactors = FALSE)
+require(tm)
+
+#Stemming
+textData <- tm::tm_map(textData, stemDocument)
+```
+
+
+```{r}
+#Stopword Removal 
+textData <- tm::tm_map(textData, removeWords, stopwords('english'))
+textData <- tm::tm_map(textData, removeWords, stopwords('SMART'))
+```
+
+
+```{r}
+#Other Pre-processing Steps: Punctuation Marks, Extra Whitespaces, etc.
+textData <- tm::tm_map(textData, content_transformer(tolower))
+textData <- tm::tm_map(textData, removePunctuation,
+                       ucp = TRUE,
+                       preserve_intra_word_contractions = FALSE,
+                       preserve_intra_word_dashes = FALSE)
+textData <- tm::tm_map(textData, stripWhitespace)
+textData[[2]]$content
+```
+
+```{r}
+#Create a uni-gram Document Term Matrix
+doc.term.matrix.1g <- tm::DocumentTermMatrix(textData)
+tm::inspect(doc.term.matrix.1g[1:10,1:10])
+
+# Represent DTM in a matrix format and display its dimensions
+doc.term.matrix.unigram <- as.matrix(doc.term.matrix.1g)
+dim(doc.term.matrix.unigram)
+head(doc.term.matrix.unigram)
+```
+```{r}
+#Create a bi-gram Document Term Matrix 
+tokenizer <-
+function(x) RWeka::NGramTokenizer(x, RWeka::Weka_control(min = 2, max = 2))
+doc.term.matrix.2g <-
+tm::DocumentTermMatrix(textData, control = list(tokenize = tokenizer))
+tm::inspect(doc.term.matrix.2g[1:10,1:10])
+
+#Represent DTM in a matrix format and display its dimensions
+doc.term.matrix.bigram <- as.matrix(doc.term.matrix.2g)
+dim(doc.term.matrix.bigram)
+head(doc.term.matrix.bigram)
+```
+
+```{r}
+#Reduce the dimension of the DTM uni-gram matrix
+doc.term.matrix.1g <- tm::removeSparseTerms(doc.term.matrix.1g, 0.99)
+tm::inspect(doc.term.matrix.1g[1:10,1:10])
+
+#Represent the DTM as a regular matrix 
+doc.term.matrix.unigram <- as.matrix(doc.term.matrix.1g)
+dim(doc.term.matrix.unigram)
+head(doc.term.matrix.unigram)
+write.csv(doc.term.matrix.unigram,"/Users/moshihathiyaageswaran/Desktop/DocTermMatrix_Unigram.csv")
+```
+```{r}
+#Reduce the dimension of the DTM bi-gram matrix
+doc.term.matrix.2g <- tm::removeSparseTerms(doc.term.matrix.2g, 0.99)
+tm::inspect(doc.term.matrix.2g[,1:10])
+
+#Represent the DTM as a regular matrix
+doc.term.matrix.bigram <- as.matrix(doc.term.matrix.2g)
+dim(doc.term.matrix.bigram)
+head(doc.term.matrix.bigram)
+write.csv(doc.term.matrix.bigram,"/Users/moshihathiyaageswaran/Desktop/DocTermMatrix_Bigram.csv")
+```
+
+```{r}
+# Declaring weights (TF-IDF variants)
+tf.idf.weights <- function(tf.vec) {
+  # Computes tfidf weights from term frequency vector
+  n.docs <- length(tf.vec)
+  doc.frequency <- length(tf.vec[tf.vec > 0])
+  weights <- rep(0, length(tf.vec))
+  relative.frequency <- tf.vec[tf.vec > 0] / sum(tf.vec[tf.vec > 0])
+  weights[tf.vec > 0] <-  relative.frequency * log10(n.docs/doc.frequency)
+  return(weights)
+}
+```
+
+```{r}
+#Compute the TF-IDF (unigram)
+tfidf.matrix.uni <- t(apply(as.matrix(doc.term.matrix.unigram), 1,
+                        FUN = function(col) {tf.idf.weights(col)}))
+
+rownames(tfidf.matrix.uni) <- df$X
+head(tfidf.matrix.uni)
+dim(tfidf.matrix.uni)
+```
+
+```{r}
+#Compute the TF-IDF (bigram)
+tfidf.matrix.bi <- t(apply(as.matrix(doc.term.matrix.bigram), 1,
+FUN = function(col) {tf.idf.weights(col)}))
+
+rownames(tfidf.matrix.bi) <- df$id
+head(tfidf.matrix.bi)
+dim(tfidf.matrix.bi)
+```
+
